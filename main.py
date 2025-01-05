@@ -5,6 +5,23 @@ from datetime import datetime
 import asyncio
 
 
+def load_env(file_path=".env"):
+    env_vars = {}
+    if not os.path.exists(file_path):
+        print(".env file not found. Skipping...")
+        return env_vars
+
+    with open(file_path, "r") as f:
+        for line in f:
+            # Ignore comments and empty lines
+            if line.strip() == "" or line.startswith("#"):
+                continue
+            key, value = line.split("=", 1)
+            env_vars[key.strip()] = value.strip()
+
+    return env_vars
+
+
 async def download_images(
     token: str,
     channel_id: int,
@@ -57,34 +74,52 @@ async def download_images(
 
 
 if __name__ == "__main__":
+    env_vars = load_env(".env")
+
     parser = argparse.ArgumentParser(
-        description="Download images from a Discord channel with date filtering."
+        description="Download images or other attachments from a Discord channel with date filtering."
     )
     parser.add_argument(
-        "-t", "--token", type=str, required=True, help="Discord bot token"
+        "-t",
+        "--token",
+        type=str,
+        default=env_vars.get("TOKEN"),
+        help="Discord bot token",
     )
     parser.add_argument(
         "-c",
         "--channel_id",
         type=int,
-        required=True,
-        help="Channel ID to fetch messages from",
+        default=int(env_vars.get("CHANNEL_ID", 0)),
+        help="Channel ID",
     )
     parser.add_argument(
         "-d",
         "--download_directory",
         type=str,
-        default=None,
-        help="Directory to save images",
+        default=env_vars.get("DOWNLOAD_DIRECTORY", ""),
+        help="Download directory",
     )
-    parser.add_argument("-s", "--start_date", type=str, help="Start date (YYYY-MM-DD)")
-    parser.add_argument("-ed", "--end_date", type=str, help="End date (YYYY-MM-DD)")
+    parser.add_argument(
+        "-s",
+        "--start_date",
+        type=str,
+        default=env_vars.get("START_DATE"),
+        help="Start date (YYYY-MM-DD)",
+    )
+    parser.add_argument(
+        "-ed",
+        "--end_date",
+        type=str,
+        default=env_vars.get("END_DATE"),
+        help="End date (YYYY-MM-DD)",
+    )
     parser.add_argument(
         "-e",
         "--extensions",
         type=str,
         nargs="*",
-        default=["png", "jpg", "jpeg", "gif"],
+        default=env_vars.get("EXTENSIONS", "png,jpg,jpeg,gif").split(","),
         help="File extensions to download (e.g., png jpg gif)",
     )
 
