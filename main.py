@@ -1,7 +1,7 @@
 import argparse
 import discord
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 import asyncio
 
 
@@ -33,8 +33,16 @@ async def download_images(
     if download_directory is None:
         download_directory = ""
 
-    start_dt = datetime.fromisoformat(start_date) if start_date else None
-    end_dt = datetime.fromisoformat(end_date) if end_date else None
+    start_dt = (
+        datetime.fromisoformat(start_date).replace(tzinfo=timezone.utc)
+        if start_date
+        else None
+    )
+    end_dt = (
+        datetime.fromisoformat(end_date).replace(tzinfo=timezone.utc)
+        if end_date
+        else None
+    )
 
     intents = discord.Intents.default()
     intents.messages = True
@@ -70,7 +78,15 @@ async def download_images(
         print("🎉 All images downloaded!")
         await client.close()
 
-    await client.start(token)
+    try:
+        await client.start(token)
+    except KeyboardInterrupt:
+        print("Bot shutting down manually...")
+    except Exception as e:
+        print(f"Bot encountered an error: {e}")
+    finally:
+        await client.close()
+        await asyncio.sleep(1)
 
 
 if __name__ == "__main__":
