@@ -1,5 +1,9 @@
 # gimme-those-pics-bot
 
+![Pics or It Didn't Happen Meme](imgflip.jpg)
+
+A simple Discord bot for downloading attachments as a ZIP file.
+
 ## Usage
 
 ``` !gimme [start_date=YYYY-MM-DD] [end_date=YYYY-MM-DD] [extensions=ext1,ext2,...] ```
@@ -27,10 +31,13 @@ The `!gimme` command allows you to download attachments from a Discord channel b
     ``` !gimme extensions=jpg,png ```
 
 3. **Download files for a specific day and type**:
+
     ```!gimme start_date=2025-01-01 extensions=pdf```
 
 4. **Download all attachments up to a specific date**:
+
     ``` !gimme end_date=2025-01-10 ```
 
 5. **Download all attachments from the past day**:
+
     ``` !gimme ```
