@@ -36,30 +36,35 @@ def get_zip_filename(start_date: str = None, end_date: str = None) -> str:
     return "attachments.zip"
 
 
+def parse_date(date_str: str):
+    """
+    Returns a datetime object of a valid date string. Valid formats (%d-%m-%Y, %d/%m/%Y, %Y-%m-%d, "%Y/%m/%d")
+    """
+
+    valid_formats = (
+        "%d-%m-%Y",
+        "%d/%m/%Y",
+        "%Y-%m-%d",
+        "%Y/%m/%d",
+    )
+    for date_format in valid_formats:
+        try:
+            return datetime.strptime(date_str, date_format).replace(tzinfo=timezone.utc)
+        except ValueError:
+            pass
+    raise ValueError(f"Date '{date_str}' is not in a recognized format.")
+
+
 # Command to download attachments
 async def download_channel_attachments(
     channel: discord.PartialMessageable,
-    download_directory: str = "",
     start_date: str = None,
     end_date: str = None,
     extensions: list = ["png", "jpg", "jpeg", "gif"],
 ):
-    if download_directory == "":
-        download_directory = "downloads"
 
-    if not os.path.exists(download_directory):
-        os.makedirs(download_directory)
-
-    start_dt = (
-        datetime.fromisoformat(start_date).replace(tzinfo=timezone.utc)
-        if start_date
-        else None
-    )
-    end_dt = (
-        datetime.fromisoformat(end_date).replace(tzinfo=timezone.utc)
-        if end_date
-        else None
-    )
+    start_dt = parse_date(start_date) if start_date else None
+    end_dt = parse_date(end_date) if end_date else None
 
     await channel.send("⏳ Fetching images...")
 
@@ -121,7 +126,6 @@ async def gimme(
     channel = channel.channel
     await download_channel_attachments(
         channel=channel,
-        download_directory="",
         start_date=start_date,
         end_date=end_date,
     )
