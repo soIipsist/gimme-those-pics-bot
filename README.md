@@ -1,8 +1,11 @@
 # gimme-those-pics-bot
 
-![Pics or It Didn't Happen Meme](imgflip.jpg)
-
-A simple Discord bot for downloading attachments as a ZIP file.
+<div align="center">
+  <img src="imgflip.jpg" alt="Image Description" width="400">
+  <h6>
+    A simple Discord bot for downloading attachments as a ZIP file.
+  </h6>
+</div>
 
 ## Usage
 
