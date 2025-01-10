@@ -1,11 +1,11 @@
 # gimme-those-pics-bot
 
 <div align="center">
-  <img src="imgflip.jpg" alt="Image Description" width="400">
-  <h6>
+  <img src="imgflip.jpg" alt="Image Description" width="500">
+  <h4>
     Need your memes, GIFs, and cat pics all in one tidy archive?
     Let this Discord bot take care of the hard work for you! 😼🌈
-  </h6>
+  </h4>
 </div>
 
 ## Usage
