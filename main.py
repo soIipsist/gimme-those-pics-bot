@@ -1,9 +1,12 @@
 import argparse
+import tempfile
 import discord
 from discord.ext import commands
 import os
 from datetime import datetime, timezone
 import asyncio
+import io
+import zipfile
 
 
 # Load environment variables from .env
@@ -21,6 +24,16 @@ def load_env(file_path=".env"):
             env_vars[key.strip()] = value.strip()
 
     return env_vars
+
+
+def get_zip_filename(start_date: str = None, end_date: str = None) -> str:
+    if start_date and end_date:
+        return f"{start_date}_{end_date}.zip"
+    if start_date:
+        return f"{start_date}.zip"
+    if end_date:
+        return f"{end_date}.zip"
+    return "attachments.zip"
 
 
 # Command to download attachments
@@ -50,19 +63,39 @@ async def download_channel_attachments(
 
     await channel.send("⏳ Fetching images...")
 
-    async for msg in channel.history(limit=10000):
-        if (start_dt and msg.created_at < start_dt) or (
-            end_dt and msg.created_at > end_dt
-        ):
-            continue
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as temp_zip:
+            zip_filename = temp_zip.name
 
-        for attachment in msg.attachments:
-            if any(attachment.filename.endswith(ext) for ext in extensions):
-                file_path = os.path.join(download_directory, attachment.filename)
-                await attachment.save(file_path)
-                print(f"✅ Saved: {file_path}")
+            with zipfile.ZipFile(temp_zip, "w", zipfile.ZIP_DEFLATED) as zipf:
+                async for msg in channel.history(limit=10000):
+                    if (start_dt and msg.created_at < start_dt) or (
+                        end_dt and msg.created_at > end_dt
+                    ):
+                        continue
 
-    await channel.send("🎉 All images have been downloaded!")
+                    for attachment in msg.attachments:
+                        if any(attachment.filename.endswith(ext) for ext in extensions):
+                            try:
+                                attachment_data = await attachment.read()
+                                zipf.writestr(attachment.filename, attachment_data)
+                                print(f"✅ Added to ZIP: {attachment.filename}")
+                            except Exception as e:
+                                print(f"❌ Failed to fetch {attachment.filename}: {e}")
+
+        filename = get_zip_filename(start_date, end_date)
+        await channel.send(
+            "🎉 All images have been downloaded!",
+            file=discord.File(fp=zip_filename, filename=filename),
+        )
+        print("✅ Sent ZIP file to user.")
+
+    except Exception as e:
+        await channel.send(f"❌ An error occurred: {e}")
+        print(f"❌ Error: {e}")
+    finally:
+        if os.path.exists(zip_filename):
+            os.remove(zip_filename)
 
 
 intents = discord.Intents.default()
@@ -80,10 +113,12 @@ async def on_ready():
 
 
 @bot.command()
-async def gimme(ctx: commands.Context, start_date: str = None, end_date: str = None):
-    await ctx.send("🛠️ Starting download...")
+async def gimme(
+    channel: commands.Context, start_date: str = None, end_date: str = None
+):
+    await channel.send("🛠️ Starting download...")
 
-    channel = ctx.channel
+    channel = channel.channel
     await download_channel_attachments(
         channel=channel,
         download_directory="",
