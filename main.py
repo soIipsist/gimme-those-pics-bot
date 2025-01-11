@@ -3,7 +3,7 @@ import tempfile
 import discord
 from discord.ext import commands
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 import zipfile
 
@@ -46,6 +46,8 @@ def parse_date(date_str: str):
         "%Y-%m-%d",
         "%Y/%m/%d",
     )
+    if isinstance(date_str, datetime):
+        return date_str
     for date_format in valid_formats:
         try:
             return datetime.strptime(date_str, date_format).replace(tzinfo=timezone.utc)
@@ -57,13 +59,13 @@ def parse_date(date_str: str):
 # Command to download attachments
 async def download_channel_attachments(
     channel: discord.PartialMessageable,
-    start_date: str = None,
-    end_date: str = None,
-    extensions: list = ["png", "jpg", "jpeg", "gif"],
+    start_date: str,
+    end_date: str,
+    extensions: list,
 ):
 
-    start_dt = parse_date(start_date) if start_date else None
-    end_dt = parse_date(end_date) if end_date else None
+    start_dt = parse_date(start_date)
+    end_dt = parse_date(end_date)
 
     await channel.send("⏳ Fetching images...")
 
@@ -73,9 +75,11 @@ async def download_channel_attachments(
 
             with zipfile.ZipFile(temp_zip, "w", zipfile.ZIP_DEFLATED) as zipf:
                 async for msg in channel.history(limit=10000):
+
                     if (start_dt and msg.created_at < start_dt) or (
                         end_dt and msg.created_at > end_dt
                     ):
+                        print(f"✅ {msg.created_at}, START {start_dt} END {end_dt}")
                         continue
 
                     for attachment in msg.attachments:
@@ -131,7 +135,7 @@ def parse_options(options: str = ""):
             elif key == "extensions":
                 extensions = value.split(",")
         else:
-            if opt.isdigit() or "-" in opt:
+            if opt.isdigit() or "-" in opt or "/" in opt:
                 if start_date is None:
                     start_date = opt
                 elif end_date is None:
@@ -141,13 +145,19 @@ def parse_options(options: str = ""):
             else:
                 extensions = [opt]
 
+    if start_date is None:
+        start_date = datetime.now().strftime("%Y-%m-%d")
+
+    if end_date is None:
+        end_date = datetime.now().strftime("%Y-%m-%d")
+
     opts = {"start_date": start_date, "end_date": end_date, "extensions": extensions}
 
     return SimpleNamespace(**opts)
 
 
 @bot.command()
-async def gimme(channel: commands.Context, *, options: str = ""):
+async def gimme(ctx: commands.Context, *, options: str = ""):
     """
     Downloads attachments based on optional arguments.
     Examples:
@@ -156,13 +166,12 @@ async def gimme(channel: commands.Context, *, options: str = ""):
     - !gimme start_date=2024-01-01 end_date=2024-02-01 extensions=jpg,png
     - !gimme extensions=gif,jpg
     """
-    await channel.send("🛠️ Starting download...")
-
+    await ctx.send("🛠️ Starting download...")
     options = parse_options(options)
+    channel = ctx.channel
 
-    await channel.send(options)
+    await ctx.send(options)
 
-    channel = channel.channel
     await download_channel_attachments(
         channel=channel,
         start_date=options.start_date,
