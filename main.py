@@ -55,12 +55,13 @@ def parse_date(date_str: str):
     raise ValueError(f"Date '{date_str}' is not in a recognized format.")
 
 
-async def send_zip_file(channel: discord.PartialMessageable, zip_filename, zip_counter):
-    zip_filename_with_counter = f"{zip_filename}_part{zip_counter}.zip"
+async def send_zip_file(
+    channel: discord.PartialMessageable, zip_filepath, zip_filename, zip_counter
+):
     try:
         await channel.send(
             f"🎉 Part {zip_counter} of the images have been downloaded!",
-            file=discord.File(zip_filename_with_counter),
+            file=discord.File(zip_filepath, zip_filename),
         )
         print(f"✅ Sent ZIP file part {zip_counter}")
     except Exception as e:
@@ -84,8 +85,9 @@ async def download_channel_attachments(
         attachment_count = 0
         total_bytes = 0
         zip_counter = 1
-
         zip_filename = get_zip_filename(start_date, end_date)
+        zip_path = None
+        zipf = None
 
         async for msg in channel.history(limit=10000):
             if (start_dt and msg.created_at < start_dt) or (
@@ -98,21 +100,30 @@ async def download_channel_attachments(
                     try:
                         attachment_data = await attachment.read()
 
-                        # Check if the current ZIP file is too large
                         if total_bytes + len(attachment_data) > MAX_ZIP_SIZE:
-                            await send_zip_file(channel, zip_filename, zip_counter)
-                            zip_counter += 1
-                            total_bytes = 0  # Reset the total bytes for the new ZIP
+                            if zipf:
+                                zipf.close()
+                                await send_zip_file(
+                                    channel,
+                                    zip_path,
+                                    zip_filename,
+                                    zip_counter,
+                                )
+                                zip_counter += 1
+                                total_bytes = 0
+                                zipf = None
 
-                        with tempfile.NamedTemporaryFile(
-                            suffix=".zip", delete=False
-                        ) as temp_zip:
+                        if zipf is None:
+                            temp_zip = tempfile.NamedTemporaryFile(
+                                suffix=".zip", delete=False
+                            )
                             zipf = zipfile.ZipFile(
                                 temp_zip.name, "w", zipfile.ZIP_DEFLATED
                             )
-                            zipf.writestr(attachment.filename, attachment_data)
-                            zipf.close()
+                            zip_path = temp_zip.name
 
+                        # Add the attachment to the zip file
+                        zipf.writestr(attachment.filename, attachment_data)
                         total_bytes += len(attachment_data)
                         attachment_count += 1
                         print(f"✅ Added to ZIP: {attachment.filename}")
@@ -121,7 +132,10 @@ async def download_channel_attachments(
                         print(f"❌ Failed to fetch {attachment.filename}: {e}")
 
         if attachment_count > 0:
-            await send_zip_file(channel, zip_filename, zip_counter)
+            if zipf:
+                zipf.close()
+                zipf = None
+            await send_zip_file(channel, zip_path, zip_filename, zip_counter)
 
         print("✅ All attachments have been processed.")
 
@@ -130,11 +144,20 @@ async def download_channel_attachments(
         print(f"❌ Error: {e}")
 
     finally:
+
+        try:
+            if os.path.exists(zip_filename):
+                os.remove(zip_filename)
+
+        except Exception as e:
+            print(f"❌ Failed to clean up: {e}")
+
         for i in range(1, zip_counter):
             try:
-                zip_path = f"{zip_filename}_part{i}.zip"
-                if os.path.exists(zip_path):
-                    os.remove(zip_path)
+                zip_filename_with_counter = f"{zip_filename}_part{i}.zip"
+                if os.path.exists(zip_filename_with_counter):
+                    os.remove(zip_filename_with_counter)
+
             except Exception as e:
                 print(f"❌ Failed to clean up: {e}")
 
