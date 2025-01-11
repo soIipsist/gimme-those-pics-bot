@@ -7,6 +7,8 @@ from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 import zipfile
 
+MAX_ZIP_SIZE = 8 * 1024 * 1024  # 8 MB file limit for discord attachments
+
 
 # Load environment variables from .env
 def load_env(file_path=".env"):
@@ -25,14 +27,11 @@ def load_env(file_path=".env"):
     return env_vars
 
 
-def get_zip_filename(start_date: str = None, end_date: str = None) -> str:
-    if start_date and end_date:
-        return f"{start_date}_{end_date}.zip"
-    if start_date:
-        return f"{start_date}.zip"
-    if end_date:
-        return f"{end_date}.zip"
-    return "attachments.zip"
+def get_zip_filename(start_date: str, end_date: str) -> str:
+    start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+    end_dt = datetime.strptime(end_date, "%Y-%m-%d")
+    filename = f"{start_dt.strftime('%d-%m-%Y')} - {end_dt.strftime('%d-%m-%Y')}.zip"
+    return filename
 
 
 def parse_date(date_str: str):
@@ -56,6 +55,18 @@ def parse_date(date_str: str):
     raise ValueError(f"Date '{date_str}' is not in a recognized format.")
 
 
+async def send_zip_file(channel: discord.PartialMessageable, zip_filename, zip_counter):
+    zip_filename_with_counter = f"{zip_filename}_part{zip_counter}.zip"
+    try:
+        await channel.send(
+            f"🎉 Part {zip_counter} of the images have been downloaded!",
+            file=discord.File(zip_filename_with_counter),
+        )
+        print(f"✅ Sent ZIP file part {zip_counter}")
+    except Exception as e:
+        print(f"❌ Error sending ZIP file part {zip_counter}: {e}")
+
+
 # Command to download attachments
 async def download_channel_attachments(
     channel: discord.PartialMessageable,
@@ -70,40 +81,62 @@ async def download_channel_attachments(
     await channel.send("⏳ Fetching images...")
 
     try:
-        with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as temp_zip:
-            zip_filename = temp_zip.name
+        attachment_count = 0
+        total_bytes = 0
+        zip_counter = 1
 
-            with zipfile.ZipFile(temp_zip, "w", zipfile.ZIP_DEFLATED) as zipf:
-                async for msg in channel.history(limit=10000):
+        zip_filename = get_zip_filename(start_date, end_date)
 
-                    if (start_dt and msg.created_at < start_dt) or (
-                        end_dt and msg.created_at > end_dt
-                    ):
-                        print(f"✅ {msg.created_at}, START {start_dt} END {end_dt}")
-                        continue
+        async for msg in channel.history(limit=10000):
+            if (start_dt and msg.created_at < start_dt) or (
+                end_dt and msg.created_at > end_dt
+            ):
+                continue
 
-                    for attachment in msg.attachments:
-                        if any(attachment.filename.endswith(ext) for ext in extensions):
-                            try:
-                                attachment_data = await attachment.read()
-                                zipf.writestr(attachment.filename, attachment_data)
-                                print(f"✅ Added to ZIP: {attachment.filename}")
-                            except Exception as e:
-                                print(f"❌ Failed to fetch {attachment.filename}: {e}")
+            for attachment in msg.attachments:
+                if any(attachment.filename.endswith(ext) for ext in extensions):
+                    try:
+                        attachment_data = await attachment.read()
 
-        filename = get_zip_filename(start_date, end_date)
-        await channel.send(
-            "🎉 All images have been downloaded!",
-            file=discord.File(fp=zip_filename, filename=filename),
-        )
-        print("✅ Sent ZIP file to user.")
+                        # Check if the current ZIP file is too large
+                        if total_bytes + len(attachment_data) > MAX_ZIP_SIZE:
+                            await send_zip_file(channel, zip_filename, zip_counter)
+                            zip_counter += 1
+                            total_bytes = 0  # Reset the total bytes for the new ZIP
+
+                        with tempfile.NamedTemporaryFile(
+                            suffix=".zip", delete=False
+                        ) as temp_zip:
+                            zipf = zipfile.ZipFile(
+                                temp_zip.name, "w", zipfile.ZIP_DEFLATED
+                            )
+                            zipf.writestr(attachment.filename, attachment_data)
+                            zipf.close()
+
+                        total_bytes += len(attachment_data)
+                        attachment_count += 1
+                        print(f"✅ Added to ZIP: {attachment.filename}")
+
+                    except Exception as e:
+                        print(f"❌ Failed to fetch {attachment.filename}: {e}")
+
+        if attachment_count > 0:
+            await send_zip_file(channel, zip_filename, zip_counter)
+
+        print("✅ All attachments have been processed.")
 
     except Exception as e:
         await channel.send(f"❌ An error occurred: {e}")
         print(f"❌ Error: {e}")
+
     finally:
-        if os.path.exists(zip_filename):
-            os.remove(zip_filename)
+        for i in range(1, zip_counter):
+            try:
+                zip_path = f"{zip_filename}_part{i}.zip"
+                if os.path.exists(zip_path):
+                    os.remove(zip_path)
+            except Exception as e:
+                print(f"❌ Failed to clean up: {e}")
 
 
 intents = discord.Intents.default()
@@ -149,7 +182,7 @@ def parse_options(options: str = ""):
         start_date = datetime.now().strftime("%Y-%m-%d")
 
     if end_date is None:
-        end_date = datetime.now().strftime("%Y-%m-%d")
+        end_date = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
 
     opts = {"start_date": start_date, "end_date": end_date, "extensions": extensions}
 
