@@ -4,8 +4,7 @@ import discord
 from discord.ext import commands
 import os
 from datetime import datetime, timezone
-import asyncio
-import io
+from types import SimpleNamespace
 import zipfile
 
 
@@ -117,17 +116,58 @@ async def on_ready():
     print(f"✅ Logged in as {bot.user}")
 
 
+def parse_options(options: str = ""):
+    extensions = ["png", "jpg", "jpeg", "gif"]
+    start_date = None
+    end_date = None
+
+    for opt in options.split():
+        if "=" in opt:
+            key, value = opt.split("=", 1)
+            if key == "start_date":
+                start_date = value
+            elif key == "end_date":
+                end_date = value
+            elif key == "extensions":
+                extensions = value.split(",")
+        else:
+            if opt.isdigit() or "-" in opt:
+                if start_date is None:
+                    start_date = opt
+                elif end_date is None:
+                    end_date = opt
+            elif "," in opt:
+                extensions = opt.split(",")
+            else:
+                extensions = [opt]
+
+    opts = {"start_date": start_date, "end_date": end_date, "extensions": extensions}
+
+    return SimpleNamespace(**opts)
+
+
 @bot.command()
-async def gimme(
-    channel: commands.Context, start_date: str = None, end_date: str = None
-):
+async def gimme(channel: commands.Context, *, options: str = ""):
+    """
+    Downloads attachments based on optional arguments.
+    Examples:
+    - !gimme
+    - !gimme 2024-01-01 2024-02-01 jpg,png
+    - !gimme start_date=2024-01-01 end_date=2024-02-01 extensions=jpg,png
+    - !gimme extensions=gif,jpg
+    """
     await channel.send("🛠️ Starting download...")
+
+    options = parse_options(options)
+
+    await channel.send(options)
 
     channel = channel.channel
     await download_channel_attachments(
         channel=channel,
-        start_date=start_date,
-        end_date=end_date,
+        start_date=options.start_date,
+        end_date=options.end_date,
+        extensions=options.extensions,
     )
 
 
