@@ -28,10 +28,20 @@ def load_env(file_path=".env"):
 
 
 def get_zip_filename(start_date: str, end_date: str) -> str:
-    start_dt = datetime.strptime(start_date, "%Y-%m-%d")
-    end_dt = datetime.strptime(end_date, "%Y-%m-%d")
-    filename = f"{start_dt.strftime('%d-%m-%Y')} - {end_dt.strftime('%d-%m-%Y')}.zip"
-    return filename
+    start_dt = parse_date(start_date)
+    end_dt = parse_date(end_date)
+
+    start_str = start_dt.strftime("%d-%m-%Y") if start_dt else None
+    end_str = end_dt.strftime("%d-%m-%Y") if end_dt else None
+
+    if start_str and end_str:
+        return f"{start_str} - {end_str}.zip"
+    elif start_str and not end_str:
+        return f"{start_str}.zip"
+    elif end_str and not start_str:
+        return f"{end_str}.zip"
+    else:
+        return "attachments.zip"
 
 
 def parse_date(date_str: str):
@@ -45,8 +55,10 @@ def parse_date(date_str: str):
         "%Y-%m-%d",
         "%Y/%m/%d",
     )
+
     if isinstance(date_str, datetime):
         return date_str
+
     for date_format in valid_formats:
         try:
             return datetime.strptime(date_str, date_format).replace(tzinfo=timezone.utc)
@@ -59,8 +71,9 @@ async def send_zip_file(
     channel: discord.PartialMessageable, zip_filepath, zip_filename, zip_counter
 ):
     try:
+        msg = f"✅ Successfully generated zip file ({zip_counter})!"
         await channel.send(
-            f"🎉 Part {zip_counter} of the images have been downloaded!",
+            msg,
             file=discord.File(zip_filepath, zip_filename),
         )
         print(f"✅ Sent ZIP file part {zip_counter}")
@@ -75,7 +88,6 @@ async def download_channel_attachments(
     end_date: str,
     extensions: list,
 ):
-
     start_dt = parse_date(start_date)
     end_dt = parse_date(end_date)
 
@@ -84,8 +96,8 @@ async def download_channel_attachments(
     try:
         attachment_count = 0
         total_bytes = 0
-        zip_counter = 1
-        zip_filename = get_zip_filename(start_date, end_date)
+        zip_counter = 0
+        zip_filename = get_zip_filename(start_dt, end_dt)
         zip_path = None
         zipf = None
 
@@ -103,13 +115,14 @@ async def download_channel_attachments(
                         if total_bytes + len(attachment_data) > MAX_ZIP_SIZE:
                             if zipf:
                                 zipf.close()
+                                zip_counter += 1
+
                                 await send_zip_file(
                                     channel,
                                     zip_path,
                                     zip_filename,
                                     zip_counter,
                                 )
-                                zip_counter += 1
                                 total_bytes = 0
                                 zipf = None
 
@@ -135,6 +148,7 @@ async def download_channel_attachments(
             if zipf:
                 zipf.close()
                 zipf = None
+            zip_counter += 1
             await send_zip_file(channel, zip_path, zip_filename, zip_counter)
 
         print("✅ All attachments have been processed.")
@@ -160,6 +174,10 @@ async def download_channel_attachments(
 
             except Exception as e:
                 print(f"❌ Failed to clean up: {e}")
+
+    await channel.send(
+        f"🎉 Operation successful! \n📎 Attachments found: {attachment_count}\n📁 Zip files created: {zip_counter} "
+    )
 
 
 intents = discord.Intents.default()
@@ -222,11 +240,8 @@ async def gimme(ctx: commands.Context, *, options: str = ""):
     - !gimme start_date=2024-01-01 end_date=2024-02-01 extensions=jpg,png
     - !gimme extensions=gif,jpg
     """
-    await ctx.send("🛠️ Starting download...")
     options = parse_options(options)
     channel = ctx.channel
-
-    await ctx.send(options)
 
     await download_channel_attachments(
         channel=channel,
