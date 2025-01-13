@@ -81,6 +81,37 @@ async def send_zip_file(
         print(f"❌ Error sending ZIP file part {zip_counter}: {e}")
 
 
+async def find_channel(ctx: commands.Context, channel: str = None):
+    """
+    Finds a channel by its ID or name within the current guild (server).
+    """
+
+    guild = ctx.guild
+    if guild is None:
+        await ctx.send("❌ This command must be used in a server, not in a DM.")
+        return None
+
+    if channel is None:
+        return ctx.channel
+
+    # get channel by ID
+    try:
+        channel_id = int(channel)
+        found_channel = guild.get_channel(channel_id)
+        if found_channel:
+            return found_channel
+    except ValueError:
+        pass
+
+    # get channel by name
+    for ch in guild.text_channels:
+        if ch.name == channel:
+            return ch
+
+    await ctx.send(f"❌ Channel '{channel}' not found in this server.")
+    return None
+
+
 # Command to download attachments
 async def download_channel_attachments(
     channel: discord.PartialMessageable,
@@ -108,7 +139,10 @@ async def download_channel_attachments(
                 continue
 
             for attachment in msg.attachments:
-                if any(attachment.filename.endswith(ext) for ext in extensions):
+                if (
+                    any(attachment.filename.endswith(ext) for ext in extensions)
+                    or extensions is None
+                ):
                     try:
                         attachment_data = await attachment.read()
 
@@ -195,9 +229,12 @@ async def on_ready():
 
 
 def parse_options(options: str = ""):
-    extensions = ["png", "jpg", "jpeg", "gif"]
+    extensions = None
     start_date = None
     end_date = None
+    channel = None
+
+    valid_channels = ["general", "photos-videos", "movies-series", "tech"]
 
     for opt in options.split():
         if "=" in opt:
@@ -208,6 +245,8 @@ def parse_options(options: str = ""):
                 end_date = value
             elif key == "extensions":
                 extensions = value.split(",")
+            elif key == "channel":
+                channel = value
         else:
             if opt.isdigit() or "-" in opt or "/" in opt:
                 if start_date is None:
@@ -216,6 +255,8 @@ def parse_options(options: str = ""):
                     end_date = opt
             elif "," in opt:
                 extensions = opt.split(",")
+            elif opt in valid_channels:
+                channel = opt
             else:
                 extensions = [opt]
 
@@ -225,7 +266,12 @@ def parse_options(options: str = ""):
     if end_date is None:
         end_date = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
 
-    opts = {"start_date": start_date, "end_date": end_date, "extensions": extensions}
+    opts = {
+        "start_date": start_date,
+        "end_date": end_date,
+        "extensions": extensions,
+        "channel": channel,
+    }
 
     return SimpleNamespace(**opts)
 
@@ -241,7 +287,8 @@ async def gimme(ctx: commands.Context, *, options: str = ""):
     - !gimme extensions=gif,jpg
     """
     options = parse_options(options)
-    channel = ctx.channel
+
+    channel = await find_channel(ctx, options.channel)
 
     await download_channel_attachments(
         channel=channel,
