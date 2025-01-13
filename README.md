@@ -21,7 +21,7 @@ The `!gimme` command allows you to download attachments from a Discord channel b
   - `extensions` (optional): Comma-separated list of file extensions to include (e.g., `jpg,png,pdf`).
 
 - **Defaults**:
-  - If `channel` is not provided, the channel you execute the command from is used.
+  - If `channel` is not provided, the command will default to the channel from which it was executed..
   - If `start_date` is not provided, it defaults to one day before the current date.
   - If `end_date` is not provided, it defaults to the current date.
   - If no `extensions` are specified, the bot retrieves all attachments regardless of type.

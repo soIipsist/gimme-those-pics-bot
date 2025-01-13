@@ -8,12 +8,48 @@ from types import SimpleNamespace
 import zipfile
 
 MAX_ZIP_SIZE = 8 * 1024 * 1024  # 8 MB file limit for discord attachments
-valid_channels = [
-    "general",
-    "photos-videos",
-    "movies-series",
-    "tech",
-]  # valid channel names
+valid_extensions = [
+    # Image file extensions
+    "jpg",
+    "jpeg",
+    "png",
+    "gif",
+    "bmp",
+    "webp",
+    "tiff",
+    # Video file extensions
+    "mp4",
+    "mkv",
+    "avi",
+    "mov",
+    "wmv",
+    "flv",
+    "webm",
+    # Audio file extensions
+    "mp3",
+    "wav",
+    "ogg",
+    "flac",
+    "aac",
+    "m4a",
+    # Document file extensions
+    "pdf",
+    "doc",
+    "docx",
+    "ppt",
+    "pptx",
+    "xls",
+    "xlsx",
+    "txt",
+    "rtf",
+    "csv",
+    # Compressed file extensions
+    "zip",
+    "rar",
+    "7z",
+    "tar",
+    "gz",
+]
 
 
 # Load environment variables from .env
@@ -257,17 +293,31 @@ def parse_options(options: str = ""):
             elif key == "channel":
                 channel = value
         else:
-            if opt.isdigit() or "-" in opt or "/" in opt:
-                if start_date is None:
-                    start_date = opt
-                elif end_date is None:
-                    end_date = opt
+            opt = opt.strip()
+            if opt.isdigit():
+                channel = opt
+            elif "-" in opt or "/" in opt:
+                try:
+                    parse_date(opt)
+                    if start_date is None:
+                        start_date = opt
+                    elif end_date is None:
+                        end_date = opt
+                except ValueError:
+
+                    if channel is None:
+                        channel = opt
+                    else:
+                        print(
+                            f"⚠️ Channel name '{opt}' ignored due to previous channel setting."
+                        )
+
             elif "," in opt:
                 extensions = opt.split(",")
-            elif opt in valid_channels:
-                channel = opt
-            else:
+            elif opt in valid_extensions:  # Single extension
                 extensions = [opt]
+            else:
+                channel = opt
 
     if start_date is None:
         start_date = datetime.now().strftime("%Y-%m-%d")
