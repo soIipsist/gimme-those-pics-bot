@@ -114,6 +114,7 @@ async def find_channel(ctx: commands.Context, channel: str = None):
 
 # Command to download attachments
 async def download_channel_attachments(
+    ctx_channel: discord.PartialMessageable,
     channel: discord.PartialMessageable,
     start_date: str,
     end_date: str,
@@ -122,7 +123,12 @@ async def download_channel_attachments(
     start_dt = parse_date(start_date)
     end_dt = parse_date(end_date)
 
-    await channel.send("⏳ Fetching images...")
+    msg = (
+        f"⏳ Fetching attachments with extensions: {', '.join(extensions)} from channel: {channel}..."
+        if extensions
+        else f"⏳ Fetching all attachments from channel: {channel}..."
+    )
+    await ctx_channel.send(msg)
 
     try:
         attachment_count = 0
@@ -139,9 +145,8 @@ async def download_channel_attachments(
                 continue
 
             for attachment in msg.attachments:
-                if (
-                    any(attachment.filename.endswith(ext) for ext in extensions)
-                    or extensions is None
+                if extensions is None or any(
+                    attachment.filename.endswith(ext) for ext in extensions
                 ):
                     try:
                         attachment_data = await attachment.read()
@@ -152,7 +157,7 @@ async def download_channel_attachments(
                                 zip_counter += 1
 
                                 await send_zip_file(
-                                    channel,
+                                    ctx_channel,
                                     zip_path,
                                     zip_filename,
                                     zip_counter,
@@ -183,12 +188,12 @@ async def download_channel_attachments(
                 zipf.close()
                 zipf = None
             zip_counter += 1
-            await send_zip_file(channel, zip_path, zip_filename, zip_counter)
+            await send_zip_file(ctx_channel, zip_path, zip_filename, zip_counter)
 
         print("✅ All attachments have been processed.")
 
     except Exception as e:
-        await channel.send(f"❌ An error occurred: {e}")
+        await ctx_channel.send(f"❌ An error occurred: {e}")
         print(f"❌ Error: {e}")
 
     finally:
@@ -209,7 +214,7 @@ async def download_channel_attachments(
             except Exception as e:
                 print(f"❌ Failed to clean up: {e}")
 
-    await channel.send(
+    await ctx_channel.send(
         f"🎉 Operation successful! \n📎 Attachments found: {attachment_count}\n📁 Zip files created: {zip_counter} "
     )
 
@@ -287,10 +292,10 @@ async def gimme(ctx: commands.Context, *, options: str = ""):
     - !gimme extensions=gif,jpg
     """
     options = parse_options(options)
-
     channel = await find_channel(ctx, options.channel)
 
     await download_channel_attachments(
+        ctx_channel=ctx.channel,
         channel=channel,
         start_date=options.start_date,
         end_date=options.end_date,
