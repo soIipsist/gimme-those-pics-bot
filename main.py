@@ -8,6 +8,12 @@ from types import SimpleNamespace
 import zipfile
 
 MAX_ZIP_SIZE = 8 * 1024 * 1024  # 8 MB file limit for discord attachments
+valid_channels = [
+    "general",
+    "photos-videos",
+    "movies-series",
+    "tech",
+]  # valid channel names
 
 
 # Load environment variables from .env
@@ -124,9 +130,9 @@ async def download_channel_attachments(
     end_dt = parse_date(end_date)
 
     msg = (
-        f"⏳ Fetching attachments with extensions: {', '.join(extensions)} from channel: {channel}..."
+        f"⏳ Fetching attachments with extensions {', '.join(extensions)} from channel #{channel}..."
         if extensions
-        else f"⏳ Fetching all attachments from channel: {channel}..."
+        else f"⏳ Fetching all attachments from channel #{channel}..."
     )
     await ctx_channel.send(msg)
 
@@ -238,8 +244,6 @@ def parse_options(options: str = ""):
     start_date = None
     end_date = None
     channel = None
-
-    valid_channels = ["general", "photos-videos", "movies-series", "tech"]
 
     for opt in options.split():
         if "=" in opt:
